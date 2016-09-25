@@ -11,5 +11,14 @@
   "dependencies": {
     "express": "^4.14.0",
     "express-handlebars": "*"
+  },
+  "devDependencies": {
+    "chai": "^3.5.0",
+    "grunt": "^1.0.1",
+    "grunt-cafe-mocha": "^0.1.13",
+    "grunt-contrib-jshint": "^1.0.0",
+    "grunt-exec": "^1.0.1",
+    "mocha": "^3.0.2",
+    "zombie": "^4.2.1"
   }
 }
