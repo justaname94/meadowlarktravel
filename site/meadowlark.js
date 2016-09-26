@@ -4,6 +4,9 @@ var fortune = require('./lib/fortune.js');
 
 var app = express();
 
+// Disable 'X-Powered-By response header'
+app.disable('x-powered-by');
+
 // set up handlebars view engine
 app.engine('handlebars', handlebars({ defaultLayout: 'main'}));
 app.set('view engine', 'handlebars');
@@ -38,6 +41,16 @@ app.get('/tours/oregon-coast', function(req, res) {
 
 app.get('/tours/request-group-rate', function(req, res) {
   res.render('tours/request-group-rate');
+});
+
+// See Request Headers
+app.get('/headers', function(req, res) {
+  res.set('Content-type', 'text/plain');
+  var s = '';
+  for (var name in req.headers) {
+    s += name + ': ' + req.headers[name] + '\n';
+  }
+  res.send(s);
 });
 
 // custom 404 page
