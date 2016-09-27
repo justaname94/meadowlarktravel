@@ -9,9 +9,12 @@
   "author": "Roniel Valdez",
   "license": "MIT",
   "dependencies": {
+    "body-parser": "^1.15.2",
     "express": "^4.14.0",
     "express-handlebars": "*",
-    "express3-handlebars": "^0.5.2"
+    "express3-handlebars": "^0.5.2",
+    "formidable": "^1.0.17",
+    "jquery-file-upload-middleware": "^0.1.8"
   },
   "devDependencies": {
     "chai": "^3.5.0",

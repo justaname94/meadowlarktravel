@@ -1,5 +1,7 @@
 var express = require('express');
 var handlebars = require('express3-handlebars');
+var formidable = require('formidable');
+var jqupload = require('jquery-file-upload-middleware');
 var fortune = require('./lib/fortune.js');
 
 var app = express();
@@ -59,13 +61,26 @@ app.engine('handlebars', handlebars({
 app.set('view engine', 'handlebars');
 
 app.use(express.static(__dirname + '/public'));
-app.set('port', process.env.PORT || 3000);
-
 app.use(function(req, res, next) {
   res.locals.showTests = app.get('env') !== 'production' &&
       req.query.test === '1';
       next();
 });
+app.use(require('body-parser')());
+
+app.use('/upload', function(req, res, next) {
+  var now = Date.now();
+  jqupload.fileHandler({
+    uploadDir: function() {
+      return __dirname + '/public/uploads/' + now;
+    },
+    uploadUrl: function() {
+      return '/uploads/' + now;
+    }
+  })(req, res, next);
+});
+
+app.set('port', process.env.PORT || 3000);
 
 app.get('/', function(req, res) {
   res.render('home');
@@ -104,6 +119,46 @@ app.get('/data/nursery-rhyme', function(req, res) {
     bodyPart: 'tail',
     adjective: 'bushy',
     noun: 'heck'
+  });
+});
+
+app.get('/thank-you', function(req, res) {
+  res.render('thank-you');
+});
+
+app.get('/newsletter', function(req, res) {
+  res.render('newsletter', { csrf: 'CSRF token goes here'} );
+});
+
+app.post('/process', function(req, res) {
+  if(req.xhr || req.accepts('json, html') === 'json') {
+    // if there were an error, we would send { error: 'error description' }
+    res.send({ success: true });
+  } else {
+    // if there were an error, we would redirect to an error page
+    res.redirect(303, '/thank-you');
+  }
+});
+
+app.get('/contest/vacation-photo', function(req, res) {
+  var now = new Date();
+  res.render('contest/vacation-photo', {
+    year: now.getFullYear(),
+    month: now.getMonth()
+  });
+});
+
+app.post('/contest/vacation-photo/:year/:month', function(req, res) {
+  var form = new formidable.IncomingForm();
+  form.parse(req, function(err, fields, files) {
+    if(err) {
+      return res.redirect(303, '/error');
+    }
+    console.log('received fields: ');
+    console.log(fields);
+    console.log('received files:');
+    console.log(files);
+    res.redirect(303, '/thank-you');
   });
 });
 
