@@ -10,7 +10,8 @@
   "license": "MIT",
   "dependencies": {
     "express": "^4.14.0",
-    "express-handlebars": "*"
+    "express-handlebars": "*",
+    "express3-handlebars": "^0.5.2"
   },
   "devDependencies": {
     "chai": "^3.5.0",
