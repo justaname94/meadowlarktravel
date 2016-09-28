@@ -3,6 +3,7 @@ var handlebars = require('express3-handlebars');
 var formidable = require('formidable');
 var jqupload = require('jquery-file-upload-middleware');
 var fortune = require('./lib/fortune.js');
+var credentials = require('./credentials.js');
 
 var app = express();
 
@@ -67,6 +68,16 @@ app.use(function(req, res, next) {
       next();
 });
 app.use(require('body-parser')());
+app.use(require('cookie-parser')(credentials.cookieSecret));
+app.use(require('express-session')());
+
+app.use(function(req, res, next) {
+  // if there's a flash message, transfer
+  // it to the context, then clear it
+  res.locals.flash = req.session.flash;
+  delete req.session.flash();
+  next();
+});
 
 app.use('/upload', function(req, res, next) {
   var now = Date.now();
@@ -84,6 +95,7 @@ app.set('port', process.env.PORT || 3000);
 
 app.get('/', function(req, res) {
   res.render('home');
+  res.cookie('signed_monster', 'nom nom', { signed: true });
 });
 
 app.get('/about', function(req, res) {
