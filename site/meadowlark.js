@@ -4,6 +4,9 @@ var formidable = require('formidable');
 var jqupload = require('jquery-file-upload-middleware');
 var fortune = require('./lib/fortune.js');
 var credentials = require('./credentials.js');
+var emailService = require('./lib/email.js')(credentials);
+
+emailService.send('roniel_valdez@outlook.com', 'Test', '<h1>test</h1>');
 
 var app = express();
 
@@ -142,6 +145,14 @@ app.get('/newsletter', function(req, res) {
   res.render('newsletter', { csrf: 'CSRF token goes here'} );
 });
 
+app.get('/contest/vacation-photo', function(req, res) {
+  var now = new Date();
+  res.render('contest/vacation-photo', {
+    year: now.getFullYear(),
+    month: now.getMonth()
+  });
+});
+
 app.post('/process', function(req, res) {
   if(req.xhr || req.accepts('json, html') === 'json') {
     // if there were an error, we would send { error: 'error description' }
@@ -150,14 +161,6 @@ app.post('/process', function(req, res) {
     // if there were an error, we would redirect to an error page
     res.redirect(303, '/thank-you');
   }
-});
-
-app.get('/contest/vacation-photo', function(req, res) {
-  var now = new Date();
-  res.render('contest/vacation-photo', {
-    year: now.getFullYear(),
-    month: now.getMonth()
-  });
 });
 
 app.post('/contest/vacation-photo/:year/:month', function(req, res) {
@@ -172,6 +175,35 @@ app.post('/contest/vacation-photo/:year/:month', function(req, res) {
     console.log(files);
     res.redirect(303, '/thank-you');
   });
+});
+
+app.post('/cart/checkout', function(req, res, next) {
+  var cart = req.session.cart;
+  if (!cart) {
+    next(new Error('Cart does not exist.'));
+  }
+  var name = req.body.name || '';
+  var email = req.body.email || '';
+  // input validation
+  if (!email.match(VALID_EMAIL_REGEX)) {
+    return res.next(new Error('Invalid email address'));
+  }
+  // assign a random cart ID; normally we would use a database ID here
+  cart.number = Math.random().toString().replace(/^0.0*/, '');
+  cart.billing = {
+    name: name,
+    email: email,
+  };
+
+  res.render('email/cart-thank-you.html', {
+    layout: null,
+    cart: cart
+  }, function(err, html) {
+    if ( err ) console.log('error in email template');
+    emailService.send('cvbot2@gmail.com',
+      'Thank You for Book your Trip with Meadowlark', html);
+  });
+  res.render('cart-thank-you', { cart: cart });
 });
 
 // See Request Headers

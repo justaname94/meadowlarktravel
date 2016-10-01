@@ -20,7 +20,8 @@
     "express-session": "^1.14.1",
     "express3-handlebars": "^0.5.2",
     "formidable": "^1.0.17",
-    "jquery-file-upload-middleware": "^0.1.8"
+    "jquery-file-upload-middleware": "^0.1.8",
+    "nodemailer": "^2.6.4"
   },
   "devDependencies": {
     "chai": "^3.5.0",
