@@ -6,9 +6,20 @@ var fortune = require('./lib/fortune.js');
 var credentials = require('./credentials.js');
 var emailService = require('./lib/email.js')(credentials);
 
-emailService.send('roniel_valdez@outlook.com', 'Test', '<h1>test</h1>');
-
 var app = express();
+
+switch(app.get('env')) {
+  case 'development':
+    // compact, colorful dev logging
+    app.use(require('morgan')('dev'));
+    break;
+  case 'production':
+    // module 'express-logger' supoorts daily log rotation
+    app.use(require('express-logger')({
+      path: __dirname + '/log/requests.log'
+    }));
+    break;
+}
 
 function getWeatherData() {
   return {
@@ -229,8 +240,19 @@ app.use(function(err, req, res, next) {
   res.send('500');
 });
 
-app.listen(app.get('port'), function() {
-  console.log('Express started on http://localhost:' + app.get('port') +
-    '; press CTRC-C to terminate');
-});
+function startServer() {
+  app.listen(app.get('port'), function() {
+    console.log('Express started in ' + app.get('env') +
+      'mode on http://localhost:' + app.get('port') +
+      '; press CTRC-C to terminate');
+  });
+}
 
+if (require.main === module) {
+  // application run directly; start app server
+  startServer();
+} else {
+  // application imported as a module via "require"; export
+  // function to create server
+  module.exports = startServer;
+}
