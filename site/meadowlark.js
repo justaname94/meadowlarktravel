@@ -164,6 +164,16 @@ app.get('/contest/vacation-photo', function(req, res) {
   });
 });
 
+app.get('/fail', function(req, res) {
+  throw new Error('Nope!');
+});
+
+app.get('/epic-fail', function(req, res) {
+  process.nextTick(function() {
+    throw new Error('Kaboom!');
+  });
+});
+
 app.post('/process', function(req, res) {
   if(req.xhr || req.accepts('json, html') === 'json') {
     // if there were an error, we would send { error: 'error description' }
@@ -237,7 +247,7 @@ app.use(function(req, res) {
 app.use(function(err, req, res, next) {
   console.error(err.stack);
   res.status(500);
-  res.send('500');
+  res.render('500');
 });
 
 function startServer() {
