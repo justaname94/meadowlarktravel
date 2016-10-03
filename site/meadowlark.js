@@ -1,10 +1,17 @@
-var express = require('express');
-var handlebars = require('express3-handlebars');
-var formidable = require('formidable');
-var jqupload = require('jquery-file-upload-middleware');
-var fortune = require('./lib/fortune.js');
-var credentials = require('./credentials.js');
-var emailService = require('./lib/email.js')(credentials);
+var express       = require('express');
+var handlebars    = require('express3-handlebars');
+var formidable    = require('formidable');
+var jqupload      = require('jquery-file-upload-middleware');
+var fs            = require('fs');
+var mongoose      = require('mongoose');
+var MongoSessionStore
+                  = require('session-mongoose')(require('connect'));
+var fortune       = require('./lib/fortune.js');
+var credentials   = require('./credentials.js');
+var emailService  = require('./lib/email.js')(credentials);
+var Vacation      = require('./models/vacation.js');
+var VacationInSeasonListener
+                  = require('./models/vacationInSeasonListener.js');
 
 var app = express();
 
@@ -19,6 +26,23 @@ switch(app.get('env')) {
       path: __dirname + '/log/requests.log'
     }));
     break;
+}
+
+var opts= {
+  server: {
+    socketOptions: { keepAlive: 1 }
+  }
+};
+
+switch(app.get('env')) {
+  case 'development':
+    mongoose.connect(credentials.mongodb.development.connectionString, opts);
+    break;
+  case 'production':
+    mongoose.connect(credentials.mongodb.production.connectionString, opts);
+    break;
+  default:
+    throw new Error('Unknown execution environment: ' + app.get('env'));
 }
 
 function getWeatherData() {
@@ -49,6 +73,50 @@ function getWeatherData() {
   };
 }
 
+// use domains for better error handling
+app.use(function(req, res, next){
+    // create a domain for this request
+    var domain = require('domain').create();
+    // handle errors on this domain
+    domain.on('error', function(err){
+        console.error('DOMAIN ERROR CAUGHT\n', err.stack);
+        try {
+            // failsafe shutdown in 5 seconds
+            setTimeout(function(){
+                console.error('Failsafe shutdown.');
+                process.exit(1);
+            }, 5000);
+
+            // disconnect from the cluster
+            var worker = require('cluster').worker;
+            if(worker) worker.disconnect();
+
+            // stop taking new requests
+            server.close();
+
+            try {
+                // attempt to use Express error route
+                next(err);
+            } catch(error){
+                // if Express error route failed, try
+                // plain Node response
+                console.error('Express error mechanism failed.\n', error.stack);
+                res.statusCode = 500;
+                res.setHeader('content-type', 'text/plain');
+                res.end('Server error.');
+            }
+        } catch(error){
+            console.error('Unable to send 500 response.\n', error.stack);
+        }
+    });
+    // add the request and response objects to the domain
+    domain.add(req);
+    domain.add(res);
+
+    // execute the rest of the request chain in the domain
+    domain.run(next);
+});
+
 app.use(function(req, res, next) {
   if(!res.locals.partials) {
     res.locals.partials = {};
@@ -75,6 +143,13 @@ app.engine('handlebars', handlebars({
 }));
 app.set('view engine', 'handlebars');
 
+
+var MongoSessionStore
+                  = require('session-mongoose')(require('connect'));
+var sessionStore = new MongoSessionStore({
+  url: credentials.mongodb[app.get('env')].connectionString
+});
+
 app.use(express.static(__dirname + '/public'));
 app.use(function(req, res, next) {
   res.locals.showTests = app.get('env') !== 'production' &&
@@ -83,7 +158,7 @@ app.use(function(req, res, next) {
 });
 app.use(require('body-parser')());
 app.use(require('cookie-parser')(credentials.cookieSecret));
-app.use(require('express-session')());
+app.use(require('express-session')( { store: sessionStore} ));
 
 app.use(function(req, res, next) {
   // if there's a flash message, transfer
@@ -164,6 +239,113 @@ app.get('/contest/vacation-photo', function(req, res) {
   });
 });
 
+// make sure data directory exists
+var dataDir = __dirname + '/data';
+var vacationPhotoDir = dataDir + '/vacation-photo';
+fs.existsSync(dataDir) || fs.mkdirSync(dataDir);
+fs.existsSync(vacationPhotoDir) || fs.mkdirSync(vacationPhotoDir);
+
+function saveContestEntry(constestName, email, year, month, photoPath) {
+  // TODO: This will come later
+}
+
+app.post('/contest/vacation-photo/:year/:month', function(req, res) {
+  var form = new formidable.IncomingForm();
+  form.parse(req, function(err, fields, files) {
+    if(err) {
+      return res.redirect(303, '/error');
+    }
+    if (err) {
+      res.session.flash = {
+        type: 'danger',
+        intro: 'Oops!',
+        message: 'There was an error processing your submission. ' +
+          'Please try again.'
+      };
+      res.redirect(303, '/contest/vacation-photo');
+    }
+    var photo = files.photo;
+    var dir = vacationPhotoDir + '/' + Date.now();
+    var path = dir + '/' + photo.name;
+    fs.mkdirSync(dir);
+    fs.renameSync(photo.path, dir + '/' + photo.name);
+    saveContestEntry('vacation-photo', fields.email,
+      req.params.year, req.params.month, path);
+    req.session.flash = {
+      type: 'sucess',
+      intro: 'Good luck!',
+      message: 'You have been entered into the contest.'
+    };
+    return res.redirect(303, '/contest/vacation-photo/entries');
+  });
+});
+
+app.get('/set-currency/:currency', function(req, res) {
+  req.session.currency = req.params.currency;
+  return res.redirect(303, '/vacations');
+});
+
+function convertFromUSD(value, currency) {
+  switch(currency) {
+    case 'USD': return value * 1;
+    case 'GBP': return value * 0.6;
+    case 'BTC': return value * 0.002370791844761;
+    default: return NaN;
+  }
+}
+
+app.get('/vacations', function(req, res){
+  Vacation.find({ available: true }, function(err, vacations){
+    var currency = req.session.currency || 'USD';
+    var context = {
+      vacations: vacations.map(function(vacation){
+        return {
+          sku: vacation.sku,
+          name: vacation.name,
+          description: vacation.description,
+          price: vacation.getDisplayPrice(),
+          inSeason: vacation.inSeason,
+        };
+      })
+    };
+  switch(currency) {
+    case 'USD': context.currencyUSD = 'selected'; break;
+    case 'GBP': context.currencyGBP = 'selected'; break;
+    case 'BTC': context.currencyBTC = 'selected'; break;
+  }
+  res.render('vacations', context);
+  });
+});
+
+app.get('/notify-me-when-in-season', function(req, res) {
+  res.render('notify-me-when-in-season', { sku: req.query.sku });
+});
+
+app.post('/notify-me-when-in-season', function(req, res) {
+  VacationInSeasonListener.update(
+    { email: req.body.email },
+    { $push: { skus: req.body.sku} },
+    { upsert: true },
+    function(err) {
+      if (err) {
+        console.error(err.stack);
+        req.session.flash = {
+          type: 'danger',
+          intro: 'Ooops!',
+          message: 'There was an error processing your request'
+        };
+        return res.redirect(303, '/vacations');
+      }
+      req.session.flash = {
+        type: 'success',
+        intro: 'Thank you!',
+        message: 'You will be notified when this vacation is in season'
+      };
+      return res.redirect(303, '/vacations');
+    }
+  );
+});
+
 app.get('/fail', function(req, res) {
   throw new Error('Nope!');
 });
@@ -182,20 +364,6 @@ app.post('/process', function(req, res) {
     // if there were an error, we would redirect to an error page
     res.redirect(303, '/thank-you');
   }
-});
-
-app.post('/contest/vacation-photo/:year/:month', function(req, res) {
-  var form = new formidable.IncomingForm();
-  form.parse(req, function(err, fields, files) {
-    if(err) {
-      return res.redirect(303, '/error');
-    }
-    console.log('received fields: ');
-    console.log(fields);
-    console.log('received files:');
-    console.log(files);
-    res.redirect(303, '/thank-you');
-  });
 });
 
 app.post('/cart/checkout', function(req, res, next) {

@@ -8,3 +8,5 @@ node_modules
 credentials.js
 jsconfig.json
 *.log
+data
+.vscode
