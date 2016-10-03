@@ -28,7 +28,7 @@ switch(app.get('env')) {
     break;
 }
 
-var opts= {
+var opts = {
   server: {
     socketOptions: { keepAlive: 1 }
   }
@@ -289,7 +289,7 @@ function convertFromUSD(value, currency) {
   switch(currency) {
     case 'USD': return value * 1;
     case 'GBP': return value * 0.6;
-    case 'BTC': return value * 0.002370791844761;
+    case 'BTC': return value * 0.0023707918444761;
     default: return NaN;
   }
 }
@@ -303,8 +303,9 @@ app.get('/vacations', function(req, res){
           sku: vacation.sku,
           name: vacation.name,
           description: vacation.description,
-          price: vacation.getDisplayPrice(),
           inSeason: vacation.inSeason,
+          price: convertFromUSD(vacation.priceInCents/100, currency),
+          qty: vacation.qty,
         };
       })
     };
