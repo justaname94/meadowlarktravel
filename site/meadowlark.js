@@ -14,12 +14,16 @@ switch(app.get('env')) {
   case 'development':
     // compact, colorful dev logging
     app.use(require('morgan')('dev'));
+
+    mongoose.connect(credentials.mongodb.development.connectionString, opts);
     break;
   case 'production':
     // module 'express-logger' supoorts daily log rotation
     app.use(require('express-logger')({
       path: __dirname + '/log/requests.log'
     }));
+
+    mongoose.connect(credentials.mongodb.production.connectionString, opts);
     break;
 }
 
@@ -28,17 +32,6 @@ var opts = {
     socketOptions: { keepAlive: 1 }
   }
 };
-
-switch(app.get('env')) {
-  case 'development':
-    mongoose.connect(credentials.mongodb.development.connectionString, opts);
-    break;
-  case 'production':
-    mongoose.connect(credentials.mongodb.production.connectionString, opts);
-    break;
-  default:
-    throw new Error('Unknown execution environment: ' + app.get('env'));
-}
 
 // use domains for better error handling
 app.use(function(req, res, next){
@@ -138,6 +131,24 @@ app.set('port', process.env.PORT || 3000);
 
 // Handle all the incoming requests
 require('./routes.js')(app);
+
+// automatic views rendering
+
+var autoViews = {};
+
+app.use(function(req, res, next) {
+  var path = req.path.toLowerCase();
+  // check cache; if it's there, render the view
+  if (autoViews[path]) return res.render(autoviews[path]);
+  // if it's not in the cache, see if there's a
+  // .handlebars file that matches
+  if(fs.existsSync(__dirname + 'views' + path + '.handlebars')) {
+    autoViews[path] = path.replace(/^\//, '');
+    return res.render(autoViews[path]);
+  }
+  // no view found; pass on to 404 handler
+  next();
+});
 
 // custom 404 page
 app.use(function(req, res) {
