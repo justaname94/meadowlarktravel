@@ -1,8 +1,8 @@
-var main      = require('./handlers/main.js');
-var tours     = require('./handlers/tours.js');
-var vacations = require('./handlers/vacations.js');
-var staff     = require('./handlers/staff.js');
-var other     = require('./handlers/other.js');
+var main          = require('./handlers/main.js');
+var tours         = require('./handlers/tours.js');
+var vacations     = require('./handlers/vacations.js');
+var staff         = require('./handlers/staff.js');
+var other         = require('./handlers/other.js');
 
 module.exports = function(app) {
   // home

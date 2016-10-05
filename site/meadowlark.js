@@ -4,6 +4,7 @@ var fs            = require('fs');
 var mongoose      = require('mongoose');
 var MongoSessionStore
                   = require('session-mongoose')(require('connect'));
+var rest          = require('connect-rest');
 var credentials   = require('./credentials.js');
 var weatherData   = require('./lib/weatherdata.js');
 var emailService  = require('./lib/email.js')(credentials);
@@ -119,6 +120,10 @@ app.use(require('body-parser')());
 app.use(require('cookie-parser')(credentials.cookieSecret));
 app.use(require('express-session')( { store: sessionStore} ));
 
+// Allow other websites to access the API
+app.use(require('cors')());
+app.use('/api', require('cors')());
+
 app.use(function(req, res, next) {
   // if there's a flash message, transfer
   // it to the context, then clear it
@@ -129,7 +134,7 @@ app.use(function(req, res, next) {
 
 app.set('port', process.env.PORT || 3000);
 
-// Handle all the incoming requests
+// Handle Website routes
 require('./routes.js')(app);
 
 // automatic views rendering
@@ -149,6 +154,18 @@ app.use(function(req, res, next) {
   // no view found; pass on to 404 handler
   next();
 });
+
+// API configuration
+var apiOptions = {
+  context: '/api',
+  domain: require('domain').create()
+};
+
+// link API into pipeline
+app.use(rest.rester(apiOptions));
+
+// Handle API routes
+require('./api_routes.js')(rest);
 
 // custom 404 page
 app.use(function(req, res) {
