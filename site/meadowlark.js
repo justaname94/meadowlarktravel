@@ -99,10 +99,17 @@ app.engine('handlebars', handlebars({
       }
       this._sections[name] = options.fn(this);
       return null;
+    },
+    static: function(name) {
+      return require('./lib/static.js').map(name);
     }
   }
 }));
 app.set('view engine', 'handlebars');
+
+// Set up js/css bundling
+var bundler = require('connect-bundle')(require('./config.js'));
+app.use(bundler);
 
 var MongoSessionStore
                   = require('session-mongoose')(require('connect'));
