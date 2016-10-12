@@ -19,6 +19,7 @@
     "connect-rest": "0.9.12",
     "cookie-parser": "^1.4.3",
     "cors": "^2.8.1",
+    "csurf": "^1.9.0",
     "express": "^4.14.0",
     "express-handlebars": "*",
     "express-logger": "0.0.3",
@@ -30,6 +31,7 @@
     "mongoose": "^4.6.2",
     "morgan": "^1.7.0",
     "nodemailer": "^2.6.4",
+    "passport": "^0.3.2",
     "session-mongoose": "^0.5.2",
     "underscore": "^1.8.3"
   },

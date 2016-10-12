@@ -1,4 +1,5 @@
 var express       = require('express');
+var https         = require('https');
 var handlebars    = require('express3-handlebars');
 var fs            = require('fs');
 var mongoose      = require('mongoose');
@@ -127,6 +128,14 @@ app.use(require('body-parser')());
 app.use(require('cookie-parser')(credentials.cookieSecret));
 app.use(require('express-session')( { store: sessionStore} ));
 
+// Protect from CSRF Attacks by using tokens to verify
+// requests source
+// app.use(require('cusrf')());
+// app.use(function(req, res, next) {
+//   res.locals._csrfToken = req.csrfToken();
+//   next();
+// });
+
 // Allow other websites to access the API
 app.use(require('cors')());
 app.use('/api', require('cors')());
@@ -138,6 +147,18 @@ app.use(function(req, res, next) {
   delete req.session.flash;
   next();
 });
+
+// Passport setup for user authentication
+var auth = require('./lib/auth.js')(app, {
+  providers: credentials.authProviders,
+  successRedirect: '/account',
+  failureRedirect: '/unauthorized'
+});
+// auth.init() links in Passport middleware
+auth.init();
+
+// now we can specify our auth routes
+auth.registerRoutes();
 
 app.set('port', process.env.PORT || 3000);
 
@@ -188,9 +209,14 @@ app.use(function(err, req, res, next) {
 });
 
 function startServer() {
-  app.listen(app.get('port'), function() {
+  var options = {
+    key: fs.readFileSync(__dirname + '/ssl/meadowlark.pem'),
+    cert: fs.readFileSync(__dirname + '/ssl/meadowlark.crt'),
+  };
+
+  https.createServer(options, app).listen(app.get('port'), function() {
     console.log('Express started in ' + app.get('env') +
-      'mode on http://localhost:' + app.get('port') +
+      'mode on https://localhost:' + app.get('port') +
       '; press CTRC-C to terminate');
   });
 }

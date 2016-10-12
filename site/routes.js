@@ -2,6 +2,7 @@ var main          = require('./handlers/main.js');
 var tours         = require('./handlers/tours.js');
 var vacations     = require('./handlers/vacations.js');
 var staff         = require('./handlers/staff.js');
+var user          = require('./handlers/user.js');
 var other         = require('./handlers/other.js');
 
 module.exports = function(app) {
@@ -27,6 +28,15 @@ module.exports = function(app) {
   // staff
   app.get('/staff', staff.staff);
   app.get('/staff/:name', staff.staff_name);
+
+  // user
+  app.get('/account', user.util_customerOnly ,
+    user.account);
+  app.get('/account/order-history', user.util_customerOnly,
+    user.account_order_history);
+  app.get('/account/email-prefs', user.util_customerOnly,
+    user.account_email_prefs);
+  app.get('/sales', user.util_employeeOnly, user.sales);
 
   // other
   app.get('/thank-you', other.thank_you);
