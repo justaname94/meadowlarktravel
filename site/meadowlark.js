@@ -6,9 +6,14 @@ var mongoose      = require('mongoose');
 var MongoSessionStore
                   = require('session-mongoose')(require('connect'));
 var rest          = require('connect-rest');
+var Q             = require('q');
 var credentials   = require('./credentials.js');
 var weatherData   = require('./lib/weatherdata.js');
 var emailService  = require('./lib/email.js')(credentials);
+var twitter       = require('./lib/twitter')({
+    consumerKey: credentials.twitter.consumerKey,
+    consumerSecret: credentials.twitter.consumerSecret
+});
 
 var app = express();
 
@@ -182,6 +187,39 @@ app.use(function(req, res, next) {
   // no view found; pass on to 404 handler
   next();
 });
+
+// test twitter functionality
+
+var topTweets = {
+  count: 10,
+  lastRefreshed: 0,
+  refreshInterval: 15 * 60 * 1000,
+  tweets: []
+};
+
+function getTopTweets(cb) {
+  if(Date.now() < topTweets.lastRefreshed +
+      topTweets.refreshInterval) {
+    return cb(topTweets.tweets);
+  }
+  twitter.search('#meadowlark', topTweets.count, function(result) {
+    var formattedTweets = [];
+    var promises = [];
+    var embedOpts = { omit_script: 1 };
+    result.statuses.forEach(function(status) {
+      var deferred = Q.defer();
+      twitter.embed(status.id_str, embedOpts, function(embed) {
+        formattedTweets.push(embed.html);
+        deferred.resolve();
+      });
+      promises.push(deferred.promise);
+    });
+    Q.all(promises).then(function() {
+      topTweets.lastRefreshed = Date.now();
+      cb(topTweets.tweets = formattedTweets);
+    });
+  });
+}
 
 // API configuration
 var apiOptions = {
