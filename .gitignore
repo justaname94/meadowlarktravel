@@ -10,3 +10,4 @@ jsconfig.json
 *.log
 data
 .vscode
+node_modules

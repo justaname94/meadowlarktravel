@@ -14,7 +14,7 @@ var twitter       = require('./lib/twitter')({
     consumerKey: credentials.twitter.consumerKey,
     consumerSecret: credentials.twitter.consumerSecret
 });
-
+var Dealer        = require('./models/dealer.js');
 var app = express();
 
 switch(app.get('env')) {
@@ -88,7 +88,7 @@ app.use(function(req, res, next) {
   if(!res.locals.partials) {
     res.locals.partials = {};
   }
-  res.locals.partials.weather = weatherData.getWeatherData();
+  res.locals.partials.weather = weatherData;
   next();
 });
 
@@ -177,10 +177,10 @@ var autoViews = {};
 app.use(function(req, res, next) {
   var path = req.path.toLowerCase();
   // check cache; if it's there, render the view
-  if (autoViews[path]) return res.render(autoviews[path]);
+  if (autoViews[path]) return res.render(autoViews[path]);
   // if it's not in the cache, see if there's a
   // .handlebars file that matches
-  if(fs.existsSync(__dirname + 'views' + path + '.handlebars')) {
+  if(fs.existsSync(__dirname + '/views' + path + '.handlebars')) {
     autoViews[path] = path.replace(/^\//, '');
     return res.render(autoViews[path]);
   }
@@ -188,7 +188,7 @@ app.use(function(req, res, next) {
   next();
 });
 
-// test twitter functionality
+// twitter functionality
 
 var topTweets = {
   count: 10,
@@ -221,7 +221,84 @@ function getTopTweets(cb) {
   });
 }
 
-// API configuration
+// Geocoding API
+
+var dealerCache = {
+  lastRefreshed: 0,
+  refreshInterval: 60 * 60 * 1000,
+  jsonUrl: '/dealers.json',
+  geocodeLimit: 2000,
+  geocodeCount: 0,
+  geocodeBegin: 0
+};
+
+dealerCache.jsonFile = __dirname +
+  '/public' + dealerCache.jsonUrl;
+
+function geocodeDealer(dealer) {
+  var addr = dealer.getAddress(' ');
+  if (addr===dealer.geocodedAddress) {
+    return;          // already geocoded
+  }
+
+  if (dealerCache.geocodeCount >= dealerCache.geocodeLimit) {
+    // has 24 passed since we last started geocoding?
+    if (Date.now() > dealerCache.geocodeCount + 24 * 60 * 60 * 1000) {
+      dealerCache.geocodeBegin = Date.now();
+      dealerCache.geocodeCount = 0;
+    } else {
+      // we can't geocode this now: we've
+      // reached our usage limit
+      return;
+    }
+  }
+
+  var geocode = require('./lib/geocode.js');
+  geocode(addr, function(err, coords) {
+    if (err) {
+      return console.log('Geocoding failute for ' + addr);
+    }
+    dealer.lat = coords.lat;
+    dealer.lng = coords.lng;
+    dealer.save();
+  });
+
+}
+
+dealerCache.refresh = function(cb) {
+  if(Date.now() > dealerCache.lastRefreshed + dealerCache.refreshInterval) {
+    // we need to refresh the cache
+    Dealer.find({ active: true }, function(err, dealers) {
+      if (err) {
+        return console.log('Error fetching dealers' + err);
+      }
+
+      // geocodeDealer will do nothing if coordinates are up-to-date
+      dealers.forEach(geocodeDealer);
+
+      // we now write all the dealers out to our cached JSON file
+      fs.writeFileSync(dealerCache.jsonFile, JSON.stringify(dealers));
+
+      // all done -- invoke callback
+      cb();
+    });
+  }
+};
+
+function refreshDealerCacheForever() {
+  dealerCache.refresh(function() {
+    // call self after refresh interval
+    setTimeout(refreshDealerCacheForever,
+      dealerCache.refreshInterval);
+  });
+}
+
+// create empty cache if it doesn't exist to prevent 404 errors
+if(!fs.existsSync(dealerCache.jsonFile)) fs.writeFileSync(JSON.stringify([]));
+// start refreshing cache
+refreshDealerCacheForever();
+
+// Website API configuration
 var apiOptions = {
   context: '/api',
   domain: require('domain').create()
@@ -236,12 +313,12 @@ require('./api_routes.js')(rest);
 // custom 404 page
 app.use(function(req, res) {
   res.status(404);
-  res.send('404');
+  res.render('404');
 });
 
 // custom 500 page
 app.use(function(err, req, res, next) {
-  console.error(err.stack);
+  console.log(err.stack);
   res.status(500);
   res.render('500');
 });
